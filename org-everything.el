@@ -49,7 +49,6 @@
 ;; Función de debug automático para probar codificaciones
 (defun org-everything--test-search (query)
   "Test search with current encoding configuration."
-  (org-everything--ensure-es)
   (let ((results '())
         (temp-buffer (get-buffer-create "*Everything-Test*")))
     (with-current-buffer temp-buffer
@@ -338,7 +337,6 @@
 (defun org-everything-raw-bytes-test ()
   "Show raw bytes from es.exe output to understand the real encoding."
   (interactive)
-  (org-everything--ensure-es)
   (let* ((test-query (read-string "Buscar (algo que tenga ñ/ó, o * para todo): " "*"))
          (cmd (split-string org-everything-args))
          (full-cmd (append cmd (list test-query)))
@@ -387,7 +385,6 @@
 (defun org-everything-quick-test ()
   "Quick test to see if es.exe works and what encoding it uses."
   (interactive)
-  (org-everything--ensure-es)
   (let ((buffer-name "*Quick ES Test*"))
     (with-output-to-temp-buffer buffer-name
       (princ "=== PRUEBA RÁPIDA DE ES.EXE ===\n\n")
@@ -708,7 +705,6 @@
         ))
         (results '())
         (original-alist process-coding-system-alist))
-    (org-everything--ensure-es)
     (message "Starting automatic encoding test with query: '%s'" test-query)
     
     (dolist (encoding encodings)
@@ -774,7 +770,6 @@ The default value is \"es -r\", which only works if you place the command line v
 (defun org-everything (&optional initial)
   "Search with `everything' for files matching input regexp given INITIAL input."
   (interactive)
-  (org-everything--ensure-es)
   (find-file (consult--find "Everything: " #'org--everything-builder initial)))
 
 (provide 'org-everything)
