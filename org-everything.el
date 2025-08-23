@@ -40,8 +40,14 @@
 (require 'consult)
 
 ;; Configuración de codificación para Everything
+;; SOLUCIÓN RÁPIDA: Si los acentos se ven mal, prueba estas configuraciones:
+;; Para Windows España: (setq process-coding-system-alist '(("es" . (cp850 . utf-8))))
+;; Para Windows Latin-1: (setq process-coding-system-alist '(("es" . (cp1252 . utf-8))))
+;; Para UTF-8: (setq process-coding-system-alist '(("es" . (utf-8 . utf-8))))
+
+;; Configuración actual (cambia esta línea si los acentos se ven mal)
 (setq process-coding-system-alist
-      '(("es" . (windows-1252 . windows-1252))))
+      '(("es" . (cp850 . utf-8))))  ; Cambiado a cp850 para mejor soporte de acentos en Windows
 
 ;; Función de debug automático para probar codificaciones
 (defun org-everything--test-search (query)
