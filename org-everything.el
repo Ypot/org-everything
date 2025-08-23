@@ -771,6 +771,184 @@ The default value is \"es -r -codepage 65001\", which forces UTF-8 output from E
   (interactive)
   (find-file (consult--find "Everything: " #'org--everything-builder initial)))
 
+(defun org-everything--string-count-regexp (string regexp)
+  "Return number of non-overlapping matches of REGEXP in STRING."
+  (let ((pos 0)
+        (count 0))
+    (while (and (< pos (length string))
+                (string-match regexp string pos))
+      (setq count (1+ count))
+      (setq pos (match-end 0)))
+    count))
+
+(defun org-everything--string-count-chars (string chars)
+  "Count how many characters from CHARS occur in STRING. CHARS is a string."
+  (let ((table (make-hash-table :test 'eq))
+        (i 0)
+        (total 0))
+    (while (< i (length chars))
+      (puthash (aref chars i) t table)
+      (setq i (1+ i)))
+    (setq i 0)
+    (while (< i (length string))
+      (when (gethash (aref string i) table)
+        (setq total (1+ total)))
+      (setq i (1+ i)))
+    total))
+
+(defun org-everything--args-has-codepage-65001-p (args)
+  "Return non-nil if ARGS list contains -codepage 65001."
+  (let ((has nil)
+        (i 0))
+    (while (< i (length args))
+      (when (and (string-equal (nth i args) "-codepage")
+                 (string-equal (or (nth (1+ i) args) "") "65001"))
+        (setq has t)
+        (setq i (length args)))
+      (setq i (1+ i)))
+    has))
+
+(defun org-everything--args-remove-codepage (args)
+  "Remove any -codepage <value> from ARGS list."
+  (let ((out '())
+        (i 0))
+    (while (< i (length args))
+      (let ((a (nth i args)))
+        (if (and (string-equal a "-codepage")
+                 (< (1+ i) (length args)))
+            (setq i (+ i 2))
+          (progn
+            (setq out (append out (list a)))
+            (setq i (1+ i))))))
+    out))
+
+(defun org-everything--split-org-args ()
+  "Split `org-everything-args' into (PROGRAM . ARGS)."
+  (let* ((parts (split-string org-everything-args "[ \t]+" t))
+         (program (car parts))
+         (args (cdr parts)))
+    (cons program args)))
+
+(defun org-everything--build-command (with-codepage &optional query)
+  "Build command list for Everything CLI. WITH-CODEPAGE forces -codepage 65001 if non-nil.
+If WITH-CODEPAGE is nil, any -codepage is removed. Append QUERY if non-nil."
+  (pcase-let* ((`(,program . ,args) (org-everything--split-org-args))
+               (args* (cond
+                       (with-codepage
+                        (if (org-everything--args-has-codepage-65001-p args)
+                            args
+                          (append args (list "-codepage" "65001"))))
+                       (t
+                        (org-everything--args-remove-codepage args))))
+               (final (if (and query (not (string-empty-p query)))
+                          (append args* (list query))
+                        args*)))
+    (cons program final)))
+
+(defun org-everything--run-cli (coding-in coding-out with-codepage query)
+  "Run Everything CLI with CODING-IN/CODING-OUT for process, controlling codepage flag.
+Return output string."
+  (pcase-let* ((`(,program . ,args) (org-everything--build-command with-codepage query)))
+    (let ((process-coding-system-alist `(("es" . (,coding-in . ,coding-out))))
+          (default-process-coding-system `(,coding-in . ,coding-out)))
+      (with-temp-buffer
+        (apply #'call-process program nil t nil args)
+        (buffer-string)))))
+
+(defun org-everything--score-output (output)
+  "Return a plist with :score and metrics for OUTPUT heuristics."
+  (let* ((good-chars "áéíóúüñÁÉÍÓÚÜÑ")
+         (good (org-everything--string-count-chars output good-chars))
+         (bad (+ (org-everything--string-count-regexp output "\\\\[0-9]+")
+                 (org-everything--string-count-regexp output "¢")
+                 (org-everything--string-count-regexp output "à")
+                 (org-everything--string-count-regexp output "Ã")))
+         (lines (length (split-string output "\n" t)))
+         (score (+ (* 3 good) (* 1 (min lines 10)) (* -5 bad))))
+    (list :good good :bad bad :lines lines :score score)))
+
+(defconst org-everything-auto-strategies
+  '((:name "utf8+codepage" :coding-in utf-8 :coding-out utf-8 :with-codepage t)
+    (:name "cp1252->utf8" :coding-in cp1252 :coding-out utf-8 :with-codepage nil)
+    (:name "win-1252->utf8" :coding-in windows-1252 :coding-out utf-8 :with-codepage nil)
+    (:name "cp850->utf8" :coding-in cp850 :coding-out utf-8 :with-codepage nil)
+    (:name "utf8-no-codepage" :coding-in utf-8 :coding-out utf-8 :with-codepage nil)
+    (:name "undecided+codepage" :coding-in undecided :coding-out utf-8 :with-codepage t))
+  "List of encoding strategies to test automatically.")
+
+(defun org-everything-auto-fix-encodings (&optional query)
+  "Automatically try encoding strategies and apply the best one. Optional QUERY to test."
+  (interactive (list (read-string "Query for test (default *): " nil nil "*")))
+  (let* ((queries (if (and query (not (string-empty-p query)))
+                      (list query)
+                    '("Dise" "produ" "ñ" "ó" "*")))
+         (best nil)
+         (report (get-buffer-create "*Everything-Auto-Fix*")))
+    (with-current-buffer report
+      (erase-buffer)
+      (insert "=== Everything Auto Encoding Fix ===\n\n"))
+    (dolist (strategy org-everything-auto-strategies)
+      (let* ((coding-in (plist-get strategy :coding-in))
+             (coding-out (plist-get strategy :coding-out))
+             (with-codepage (plist-get strategy :with-codepage))
+             (name (plist-get strategy :name))
+             (agg-score 0)
+             (agg-good 0)
+             (agg-bad 0)
+             (agg-lines 0))
+        (dolist (q queries)
+          (let* ((out (condition-case _
+                           (org-everything--run-cli coding-in coding-out with-codepage q)
+                         (error "")))
+                 (m (org-everything--score-output out)))
+            (setq agg-score (+ agg-score (plist-get m :score)))
+            (setq agg-good (+ agg-good (plist-get m :good)))
+            (setq agg-bad (+ agg-bad (plist-get m :bad)))
+            (setq agg-lines (+ agg-lines (plist-get m :lines)))))
+        (with-current-buffer report
+          (insert (format "- %s: score=%d good=%d bad=%d lines=%d\n"
+                          name agg-score agg-good agg-bad agg-lines)))
+        (when (or (null best)
+                  (> agg-score (plist-get (cdr best) :score)))
+          (setq best (cons strategy (list :score agg-score :good agg-good :bad agg-bad :lines agg-lines))))))
+    (with-current-buffer report
+      (insert "\n"))
+    (if (null best)
+        (progn
+          (with-current-buffer report
+            (insert "No viable strategy found. Keeping current settings.\n"))
+          (display-buffer report)
+          (message "Everything auto-fix: no strategy applied"))
+      (let* ((strategy (car best))
+             (coding-in (plist-get strategy :coding-in))
+             (coding-out (plist-get strategy :coding-out))
+             (with-codepage (plist-get strategy :with-codepage))
+             (args-parts (split-string org-everything-args "[ \t]+" t))
+             (program (car args-parts))
+             (args (cdr args-parts))
+             (new-args (if with-codepage
+                           (if (org-everything--args-has-codepage-65001-p args)
+                               args
+                             (append args (list "-codepage" "65001")))
+                         (org-everything--args-remove-codepage args)))
+             (new-org-args (mapconcat #'identity (cons program new-args) " ")))
+        ;; Apply settings
+        (setq org-everything-args new-org-args)
+        (setq process-coding-system-alist (assoc-delete-all "es" process-coding-system-alist))
+        (add-to-list 'process-coding-system-alist (cons "es" (cons coding-in coding-out)))
+        (with-current-buffer report
+          (insert (format "Applied strategy: %s\n" (plist-get strategy :name)))
+          (insert (format "org-everything-args: %s\n" org-everything-args))
+          (insert (format "process-coding-system-alist[es]: (%s . %s)\n" coding-in coding-out)))
+        (display-buffer report)
+        (message "Everything auto-fix applied: %s" (plist-get strategy :name))))))
+
+(defun org-everything-auto-run (&optional initial)
+  "Run auto-fix for encodings, then start `org-everything' with INITIAL input."
+  (interactive)
+  (org-everything-auto-fix-encodings "*")
+  (call-interactively 'org-everything))
+
 (provide 'org-everything)
 
 ;;; org-everything.el ends here
