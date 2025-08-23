@@ -901,8 +901,10 @@ Return output string."
   "Automatically try encoding strategies and apply the best one. Optional QUERY to test."
   (interactive (list (read-string "Query for test (default auto): " nil nil "")))
   (let* ((queries0 (if (and query (not (string-empty-p query))) (list query) (org-everything--test-queries)))
-         (queries (org-everything--ensure-accent-probes queries0))
+         (queries1 (org-everything--ensure-accent-probes queries0))
+         (queries (delete-dups (append queries1 (org-everything--test-queries))))
          (best nil)
+         (best-metrics nil)
          (report (get-buffer-create "*Everything-Auto-Fix*")))
     (with-current-buffer report
       (erase-buffer)
@@ -928,18 +930,25 @@ Return output string."
         (with-current-buffer report
           (insert (format "- %s: score=%d good=%d bad=%d lines=%d\n"
                           name agg-score agg-good agg-bad agg-lines)))
-        (when (or (null best)
-                  (> agg-score (plist-get (cdr best) :score)))
-          (setq best (cons strategy (list :score agg-score :good agg-good :bad agg-bad :lines agg-lines))))))
+        (let ((metrics (list :score agg-score :good agg-good :bad agg-bad :lines agg-lines)))
+          (when (or (null best)
+                    (> (plist-get metrics :lines) (plist-get best-metrics :lines))
+                    (and (= (plist-get metrics :lines) (plist-get best-metrics :lines))
+                         (< (plist-get metrics :bad) (plist-get best-metrics :bad)))
+                    (and (= (plist-get metrics :lines) (plist-get best-metrics :lines))
+                         (= (plist-get metrics :bad) (plist-get best-metrics :bad))
+                         (> (plist-get metrics :good) (plist-get best-metrics :good)))))
+            (setq best strategy)
+            (setq best-metrics metrics)))))
     (with-current-buffer report
       (insert "\n"))
-    (if (or (null best) (= (plist-get (cdr best) :lines) 0))
+    (if (or (null best) (= (plist-get best-metrics :lines) 0))
         (progn
           (with-current-buffer report
             (insert "No viable strategy found (no lines). Keeping current settings.\n"))
           (display-buffer report)
           (message "Everything auto-fix: no strategy applied"))
-      (let* ((strategy (car best))
+      (let* ((strategy best)
              (coding-in (plist-get strategy :coding-in))
              (coding-out (plist-get strategy :coding-out))
              (with-codepage (plist-get strategy :with-codepage))
