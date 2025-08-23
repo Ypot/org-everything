@@ -777,24 +777,87 @@ Each element is a single argument. Nil leaves the command unchanged."
 
 ;; Optional Consult async overrides (nil means: do not override Consult globals)
 (defcustom org-everything-consult-min-input nil
-  "If a number, temporarily override `consult-async-min-input' while running `org-everything'.
-Nil means do not override."
+  "Minimum number of input characters before starting an asynchronous search in Consult for this command.
+When set to a positive integer, this temporarily overrides `consult-async-min-input` while running `org-everything`.
+
+Practical effects:
+- With a low value (e.g., 1), searches trigger very early, which can spawn frequent subprocesses and cause flicker on large trees.
+- With a moderate value (e.g., 2–3), Emacs waits until the query is more specific before calling `es.exe`, reducing process churn and I/O.
+- With nil (default), the global Consult setting is respected and nothing is changed by `org-everything`.
+
+When to adjust:
+- Increase to 2–3 if you experience lag or too many rapid updates while typing.
+- Keep nil if you already tuned Consult globally and prefer a single place of control."
   :type '(choice (const :tag "Do not override (default)" nil) integer))
 
 (defcustom org-everything-consult-refresh-delay nil
-  "If a number, temporarily override `consult-async-refresh-delay' for `org-everything'.
-Nil means do not override."
+  "Delay (in seconds) before Consult refreshes the candidate list after new input for this command.
+When set to a number, this temporarily overrides `consult-async-refresh-delay` while running `org-everything`.
+
+Practical effects:
+- Lower values (e.g., 0.05–0.10) refresh results more eagerly, improving perceived responsiveness on small projects.
+- Higher values (e.g., 0.15–0.30) batch updates and reduce UI flicker and subprocess pressure on very large codebases.
+- Nil (default) leaves the global Consult behavior unchanged.
+
+When to adjust:
+- Raise slightly if you notice excessive flicker or CPU usage while typing.
+- Lower if your machine is fast and you want more immediate feedback."
   :type '(choice (const :tag "Do not override (default)" nil) number))
 
 (defcustom org-everything-consult-input-throttle nil
-  "If a number, temporarily override `consult-async-input-throttle' for `org-everything'.
-Nil means do not override."
+  "Minimum time (in seconds) between consecutive asynchronous updates triggered by input for this command.
+When set, this temporarily overrides `consult-async-input-throttle` while running `org-everything`.
+
+Practical effects:
+- Acts like a rate limiter for updates: a higher value means fewer refreshes per second.
+- Useful on networked or very large file sets, where every refresh can be expensive.
+- Nil (default) respects the global Consult configuration without local changes.
+
+When to adjust:
+- Increase to 0.15–0.30 if your system feels overloaded during rapid typing.
+- Keep low or nil if updates are already smooth and inexpensive."
   :type '(choice (const :tag "Do not override (default)" nil) number))
 
 (defcustom org-everything-consult-input-debounce nil
-  "If a number, temporarily override `consult-async-input-debounce' for `org-everything'.
-Nil means do not override."
+  "Waiting time (in seconds) after the last key press before starting an asynchronous update for this command.
+When set, this temporarily overrides `consult-async-input-debounce` while running `org-everything`.
+
+Practical effects:
+- Debouncing consolidates bursts of keystrokes into a single refresh; slightly larger values favor stability over immediacy.
+- On very fast typists or slow systems, a small debounce (e.g., 0.05–0.15) can noticeably reduce redundant work.
+- Nil (default) leaves the global Consult settings untouched.
+
+When to adjust:
+- Increase mildly if intermediate updates are rarely helpful while you type complete terms.
+- Decrease if you prefer to see results almost instantly after short pauses."
   :type '(choice (const :tag "Do not override (default)" nil) number))
+
+(defcustom org-everything-consult-preview-key nil
+  "Preview toggling key for Consult while running `org-everything`.
+When non-nil, this temporarily overrides `consult-preview-key` during the command.
+
+What it controls:
+- Consult offers an optional live preview of candidates (e.g., showing a file) as you move selection in the minibuffer.
+- The preview can be always-on, on-demand (triggered by a specific key), or disabled entirely.
+
+Accepted values:
+- nil (default): Do not override; use the global `consult-preview-key`.
+- The symbol `any`: Enable preview on any key press that changes the selection.
+- A key sequence (string or vector), e.g., "M-.", to show preview only when that key is pressed.
+- A list of key sequences: preview is shown when you press any of them.
+
+Performance/UX trade-offs:
+- Always-on preview (e.g., `any`) can be helpful for immediate feedback but may open many short-lived previews as you navigate, which can be distracting and wasteful on large projects.
+- A dedicated trigger key (e.g., "M-.") is often a sweet spot: you move quickly without preview noise and request a preview on demand.
+- Disabling preview (set to an impossible key or leave nil and configure globally) minimizes UI work and maximizes throughput for very large trees.
+
+When to adjust:
+- Set to a specific key like "M-." if you want manual, predictable previews while keeping the UI snappy.
+- Leave nil if you already manage preview globally in Consult and prefer consistency."
+  :type '(choice (const :tag "Do not override (default)" nil)
+                 (const :tag "Preview on any key" any)
+                 key-sequence
+                 (repeat key-sequence)))
 
 (defun org-everything--effective-args ()
   "Build the final argument vector for es.exe based on user options.
@@ -842,7 +905,10 @@ Starts from `org-everything-args' and appends performance flags when configured.
                                         consult-async-input-throttle))
         (consult-async-input-debounce (if (numberp org-everything-consult-input-debounce)
                                           org-everything-consult-input-debounce
-                                        consult-async-input-debounce)))
+                                        consult-async-input-debounce))
+        (consult-preview-key (if (not (null org-everything-consult-preview-key))
+                                 org-everything-consult-preview-key
+                               consult-preview-key)))
     (find-file (consult--find "Everything: " #'org--everything-builder initial))))
 
 (provide 'org-everything)
