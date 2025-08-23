@@ -38,14 +38,18 @@
 ;;; Code:
 
 (require 'consult)
+(require 'subr-x)
+(require 'seq)
 
-;; Configuración de codificación para Everything
-(setq process-coding-system-alist
-      '(("es" . (windows-1252 . windows-1252))))
+;; Configuración de codificación para Everything (no destructivo, CP850 recomendado)
+(unless (assoc "es" process-coding-system-alist)
+  (add-to-list 'process-coding-system-alist '("es" . (cp850 . cp850)) t)
+)
 
 ;; Función de debug automático para probar codificaciones
 (defun org-everything--test-search (query)
   "Test search with current encoding configuration."
+  (org-everything--ensure-es)
   (let ((results '())
         (temp-buffer (get-buffer-create "*Everything-Test*")))
     (with-current-buffer temp-buffer
@@ -60,7 +64,7 @@
               (push line results)))
           (forward-line 1))))
     (kill-buffer temp-buffer)
-    results))
+    (nreverse results)))
 
 ;; Sistema de debug complejo para analizar el flujo completo
 (defun org-everything-debug-complex ()
@@ -334,6 +338,7 @@
 (defun org-everything-raw-bytes-test ()
   "Show raw bytes from es.exe output to understand the real encoding."
   (interactive)
+  (org-everything--ensure-es)
   (let* ((test-query (read-string "Buscar (algo que tenga ñ/ó, o * para todo): " "*"))
          (cmd (split-string org-everything-args))
          (full-cmd (append cmd (list test-query)))
@@ -382,6 +387,7 @@
 (defun org-everything-quick-test ()
   "Quick test to see if es.exe works and what encoding it uses."
   (interactive)
+  (org-everything--ensure-es)
   (let ((buffer-name "*Quick ES Test*"))
     (with-output-to-temp-buffer buffer-name
       (princ "=== PRUEBA RÁPIDA DE ES.EXE ===\n\n")
@@ -513,7 +519,7 @@
           raw-text undecided nil
         ))
         (results '())
-        (original-encoding (assoc "es" process-coding-system-alist))
+        (original-alist process-coding-system-alist)
         (buffer-name "*Massive Encoding Test*"))
     
     (with-output-to-temp-buffer buffer-name
@@ -532,7 +538,7 @@
            (push (cons encoding '()) results))))
       
       ;; Restaurar configuración original
-      (setq process-coding-system-alist (list original-encoding))
+      (setq process-coding-system-alist original-alist)
       
       ;; Mostrar resumen
       (princ "\n=== RESUMEN DE RESULTADOS ===\n")
@@ -701,8 +707,8 @@
           (windows-1252 . terminal)
         ))
         (results '())
-        (original-encoding (assoc "es" process-coding-system-alist)))
-    
+        (original-alist process-coding-system-alist))
+    (org-everything--ensure-es)
     (message "Starting automatic encoding test with query: '%s'" test-query)
     
     (dolist (encoding encodings)
@@ -715,7 +721,7 @@
         (message "Encoding %s: Found %d results" encoding (length search-results))))
     
     ;; Restaurar configuración original
-    (setq process-coding-system-alist (list original-encoding))
+    (setq process-coding-system-alist original-alist)
     
     ;; Mostrar resultados
     (org-everything--show-encoding-results results)))
@@ -768,6 +774,7 @@ The default value is \"es -r\", which only works if you place the command line v
 (defun org-everything (&optional initial)
   "Search with `everything' for files matching input regexp given INITIAL input."
   (interactive)
+  (org-everything--ensure-es)
   (find-file (consult--find "Everything: " #'org--everything-builder initial)))
 
 (provide 'org-everything)
