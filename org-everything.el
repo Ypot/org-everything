@@ -871,12 +871,13 @@ Return output string."
   "Return a plist with :score and metrics for OUTPUT heuristics."
   (let* ((good-chars "áéíóúüñÁÉÍÓÚÜÑ")
          (good (org-everything--string-count-chars output good-chars))
-         (bad (+ (org-everything--string-count-regexp output "\\\\[0-9]+")
+         (bad (+ (org-everything--string-count-regexp output "\\\\\[0-9]+")
                  (org-everything--string-count-regexp output "¢")
                  (org-everything--string-count-regexp output "à")
                  (org-everything--string-count-regexp output "Ã")))
          (lines (length (split-string output "\n" t)))
-         (score (+ (* 3 good) (* 1 (min lines 10)) (* -5 bad))))
+         (score (+ (* 3 good) (* 1 (min lines 10)) (* -5 bad)
+                   (if (= lines 0) -1000 0))))
     (list :good good :bad bad :lines lines :score score)))
 
 (defconst org-everything-auto-strategies
