@@ -777,24 +777,220 @@ Each element is a single argument. Nil leaves the command unchanged."
 
 ;; Optional Consult async overrides (nil means: do not override Consult globals)
 (defcustom org-everything-consult-min-input nil
-  "If a number, temporarily override `consult-async-min-input' while running `org-everything'.
-Nil means do not override."
+  "Minimum number of input characters before starting an asynchronous search in Consult for this command.
+When set to a positive integer, this temporarily overrides `consult-async-min-input` while running `org-everything`.
+
+Practical effects:
+- With a low value (e.g., 1), searches trigger very early, which can spawn frequent subprocesses and cause flicker on large trees.
+- With a moderate value (e.g., 2–3), Emacs waits until the query is more specific before calling `es.exe`, reducing process churn and I/O.
+- With nil (default), the global Consult setting is respected and nothing is changed by `org-everything`.
+
+When to adjust:
+- Increase to 2–3 if you experience lag or too many rapid updates while typing.
+- Keep nil if you already tuned Consult globally and prefer a single place of control."
   :type '(choice (const :tag "Do not override (default)" nil) integer))
 
 (defcustom org-everything-consult-refresh-delay nil
-  "If a number, temporarily override `consult-async-refresh-delay' for `org-everything'.
-Nil means do not override."
+  "Delay (in seconds) before Consult refreshes the candidate list after new input for this command.
+When set to a number, this temporarily overrides `consult-async-refresh-delay` while running `org-everything`.
+
+Practical effects:
+- Lower values (e.g., 0.05–0.10) refresh results more eagerly, improving perceived responsiveness on small projects.
+- Higher values (e.g., 0.15–0.30) batch updates and reduce UI flicker and subprocess pressure on very large codebases.
+- Nil (default) leaves the global Consult behavior unchanged.
+
+When to adjust:
+- Raise slightly if you notice excessive flicker or CPU usage while typing.
+- Lower if your machine is fast and you want more immediate feedback."
   :type '(choice (const :tag "Do not override (default)" nil) number))
 
 (defcustom org-everything-consult-input-throttle nil
-  "If a number, temporarily override `consult-async-input-throttle' for `org-everything'.
-Nil means do not override."
+  "Minimum time (in seconds) between consecutive asynchronous updates triggered by input for this command.
+When set, this temporarily overrides `consult-async-input-throttle` while running `org-everything`.
+
+Practical effects:
+- Acts like a rate limiter for updates: a higher value means fewer refreshes per second.
+- Useful on networked or very large file sets, where every refresh can be expensive.
+- Nil (default) respects the global Consult configuration without local changes.
+
+When to adjust:
+- Increase to 0.15–0.30 if your system feels overloaded during rapid typing.
+- Keep low or nil if updates are already smooth and inexpensive."
   :type '(choice (const :tag "Do not override (default)" nil) number))
 
 (defcustom org-everything-consult-input-debounce nil
-  "If a number, temporarily override `consult-async-input-debounce' for `org-everything'.
-Nil means do not override."
+  "Waiting time (in seconds) after the last key press before starting an asynchronous update for this command.
+When set, this temporarily overrides `consult-async-input-debounce` while running `org-everything`.
+
+Practical effects:
+- Debouncing consolidates bursts of keystrokes into a single refresh; slightly larger values favor stability over immediacy.
+- On very fast typists or slow systems, a small debounce (e.g., 0.05–0.15) can noticeably reduce redundant work.
+- Nil (default) leaves the global Consult settings untouched.
+
+When to adjust:
+- Increase mildly if intermediate updates are rarely helpful while you type complete terms.
+- Decrease if you prefer to see results almost instantly after short pauses."
   :type '(choice (const :tag "Do not override (default)" nil) number))
+
+(defcustom org-everything-consult-preview-key nil
+  "Preview toggling key for Consult while running `org-everything`.
+When non-nil, this temporarily overrides `consult-preview-key` during the command.
+
+What it controls:
+- Consult offers an optional live preview of candidates (e.g., showing a file) as you move selection in the minibuffer.
+- The preview can be always-on, on-demand (triggered by a specific key), or disabled entirely.
+
+Accepted values:
+- nil (default): Do not override; use the global `consult-preview-key`.
+- The symbol `any`: Enable preview on any key press that changes the selection.
+- A key sequence (string or vector), e.g., "M-.", to show preview only when that key is pressed.
+- A list of key sequences: preview is shown when you press any of them.
+
+Performance/UX trade-offs:
+- Always-on preview (e.g., `any`) can be helpful for immediate feedback but may open many short-lived previews as you navigate, which can be distracting and wasteful on large projects.
+- A dedicated trigger key (e.g., "M-.") is often a sweet spot: you move quickly without preview noise and request a preview on demand.
+- Disabling preview (set to an impossible key or leave nil and configure globally) minimizes UI work and maximizes throughput for very large trees.
+
+When to adjust:
+- Set to a specific key like "M-." if you want manual, predictable previews while keeping the UI snappy.
+- Leave nil if you already manage preview globally in Consult and prefer consistency."
+  :type '(choice (const :tag "Do not override (default)" nil)
+                 (const :tag "Preview on any key" any)
+                 key-sequence
+                 (repeat key-sequence)))
+
+;; ===== ONE-SHOT + LOCAL FILTERING VARIANTS =====
+
+(defcustom org-everything-one-shot-args
+  "es"
+  "Base command for one-shot collection from Everything (es.exe).
+This string is parsed into arguments via `consult--build-args` and used to invoke the CLI exactly once to collect an initial candidate set.
+
+Key idea:
+- The "one-shot" approach queries Everything only once to collect a finite list of file paths. After that, all interactive filtering happens locally inside Emacs using completion styles (e.g., Orderless), which avoids spawning a new `es.exe` process on every keystroke.
+
+Defaults and safety:
+- Default is simply "es" (no regex, no case option). Additional behavior is controlled by the defcustoms below (limit, regex toggle, case toggle, prefix).
+- This only affects the alternative command `org-everything-one-shot`. The primary `org-everything` command remains unchanged."
+  :type 'string)
+
+(defcustom org-everything-one-shot-limit
+  2000
+  "Maximum number of results to collect in the one-shot pass (passed as -n).
+Higher values provide broader coverage at the cost of a larger in-memory list; lower values return faster and keep the local filtering snappy.
+
+Guidance:
+- 1000–5000 is a practical range for modern machines.
+- If you routinely search giant trees, start at 2000 and adjust based on responsiveness."
+  :type 'integer)
+
+(defcustom org-everything-one-shot-ignore-case
+  nil
+  "When non-nil, add -i to the one-shot collection so that Everything performs a case-insensitive match for the base query.
+Note that this toggle only applies to the initial collection. Subsequent interactive filtering is performed locally in Emacs and follows the active completion style (e.g., Orderless)."
+  :type 'boolean)
+
+(defcustom org-everything-one-shot-use-regex
+  nil
+  "When non-nil, add -r to the one-shot collection to interpret the base query as a regular expression in Everything.
+In the one-shot model, regex is typically unnecessary because the bulk of narrowing happens locally. Keep this disabled for maximum speed unless you need a specialized prefilter."
+  :type 'boolean)
+
+(defcustom org-everything-one-shot-base-query
+  "*"
+  "Base query sent to Everything for the one-shot collection, before any interactive narrowing.
+Examples:
+- "*" (match everything)
+- "ext:pdf *" (collect only PDFs)
+- "path:src *" (collect only under src)
+
+This base query is also combined with `org-everything-default-query-prefix` if that prefix is non-empty."
+  :type 'string)
+
+(defcustom org-everything-one-shot-orderless
+  t
+  "When non-nil, prefer the Orderless completion style for local filtering, if available.
+Behavior:
+- If Orderless is installed (`require` succeeds), it will be pushed to the front of `completion-styles` during the `org-everything-one-shot` session, enabling fast, flexible, multi-term filtering without additional subprocesses.
+- If Orderless is not installed, nothing breaks; Emacs falls back to your configured completion styles.
+
+Why this helps:
+- Local filtering with Orderless excels at quickly slicing a large candidate list using space-separated terms, substrings, and patterns, all without extra calls to `es.exe`."
+  :type 'boolean)
+
+(defun org-everything--one-shot-effective-args ()
+  "Build argument vector for the one-shot collection based on user options.
+Starts from `org-everything-one-shot-args` and appends flags for case, regex, and limit.
+`org-everything-extra-args` are also appended for convenience."
+  (let* ((args (consult--build-args org-everything-one-shot-args)))
+    (when (and org-everything-one-shot-ignore-case
+               (not (member "-i" args)))
+      (setq args (append args '("-i"))))
+    (when (and org-everything-one-shot-use-regex
+               (not (member "-r" args)))
+      (setq args (append args '("-r"))))
+    (when (and (integerp org-everything-one-shot-limit)
+               (> org-everything-one-shot-limit 0))
+      (setq args (append args (list "-n" (number-to-string org-everything-one-shot-limit)))))
+    (when (listp org-everything-extra-args)
+      (setq args (append args org-everything-extra-args)))
+    args))
+
+(defun org-everything--one-shot-build-query ()
+  "Compose the base query for the one-shot pass, applying the optional default prefix."
+  (let* ((bq (or org-everything-one-shot-base-query ""))
+         (prefix org-everything-default-query-prefix))
+    (cond
+     ((and (stringp prefix) (not (string-empty-p prefix))
+           (stringp bq) (not (string-empty-p bq)))
+      (concat prefix bq))
+     ((and (stringp prefix) (not (string-empty-p prefix))) prefix)
+     ((and (stringp bq) (not (string-empty-p bq))) bq)
+     (t "*"))))
+
+;;;###autoload
+(defun org-everything-one-shot ()
+  "Alternative Everything integration that does a single collection (one-shot) and filters locally.
+
+How it differs from `org-everything`:
+- `org-everything` calls Everything on each input change (asynchronously via Consult), excellent for exact fidelity with Everything's matching syntax.
+- `org-everything-one-shot` calls Everything once to collect up to `org-everything-one-shot-limit` matches for a base query, then relies on Emacs completion (preferably Orderless) to filter interactively without additional subprocesses.
+
+When to use this:
+- You want ultra-responsive narrowing for file names where Everything's advanced operators aren't needed during interactive refinement.
+- You prefer to pay the cost of one initial fetch and then enjoy instant, local filtering thereafter.
+
+Notes:
+- Encoding and process settings for `es.exe` remain as configured globally (this command does not alter them).
+- If Orderless is available and `org-everything-one-shot-orderless` is non-nil, it is preferred locally; otherwise, your existing completion setup is used."
+  (interactive)
+  (let* ((args (org-everything--one-shot-effective-args))
+         (query (org-everything--one-shot-build-query))
+         (full (append args (list query)))
+         (raw (with-temp-buffer
+                (apply #'call-process (car full) nil t nil (cdr full))
+                (buffer-string)))
+         (candidates (seq-filter (lambda (s) (not (string-empty-p (string-trim s))))
+                                 (split-string raw "\n")))
+         ;; Prefer Orderless locally if available and requested
+         (local-completion-styles (let ((base-styles completion-styles))
+                                    (if (and org-everything-one-shot-orderless
+                                             (require 'orderless nil t))
+                                        (cons 'orderless (remq 'orderless base-styles))
+                                      base-styles))))
+    (if (null candidates)
+        (user-error "Everything (one-shot) returned no candidates for base query: %s" query)
+      (let* ((completion-styles local-completion-styles)
+             (consult-preview-key (if (not (null org-everything-consult-preview-key))
+                                      org-everything-consult-preview-key
+                                    consult-preview-key))
+             (selection (consult--read candidates
+                                       :prompt "Everything (one-shot): "
+                                       :category 'file
+                                       :require-match t
+                                       :sort t)))
+        (when selection
+          (find-file selection))))))
 
 (defun org-everything--effective-args ()
   "Build the final argument vector for es.exe based on user options.
@@ -842,7 +1038,10 @@ Starts from `org-everything-args' and appends performance flags when configured.
                                         consult-async-input-throttle))
         (consult-async-input-debounce (if (numberp org-everything-consult-input-debounce)
                                           org-everything-consult-input-debounce
-                                        consult-async-input-debounce)))
+                                        consult-async-input-debounce))
+        (consult-preview-key (if (not (null org-everything-consult-preview-key))
+                                 org-everything-consult-preview-key
+                               consult-preview-key)))
     (find-file (consult--find "Everything: " #'org--everything-builder initial))))
 
 (provide 'org-everything)
