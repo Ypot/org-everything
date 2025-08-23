@@ -38,10 +38,11 @@
 ;;; Code:
 
 (require 'consult)
+(require 'subr-x)
+(require 'seq)
 
 ;; Configuración de codificación para Everything
-(setq process-coding-system-alist
-      '(("es" . (windows-1252 . windows-1252))))
+(add-to-list 'process-coding-system-alist '("es" . (utf-8 . utf-8)))
 
 ;; Función de debug automático para probar codificaciones
 (defun org-everything--test-search (query)
@@ -261,7 +262,7 @@
   
   ;; Remover configuración previa si existe
   (setq process-coding-system-alist 
-        (assq-delete-all "es" process-coding-system-alist))
+        (assoc-delete-all "es" process-coding-system-alist))
   
   ;; Aplicar nueva configuración
   (add-to-list 'process-coding-system-alist `("es" . (,encoding . utf-8)))
@@ -747,10 +748,10 @@
     (display-buffer buffer)))
 
 (defcustom org-everything-args
-  "es -r"
+  "es -r -codepage 65001"
   "Command line arguments for everything, see `org-everything'.
 
-The default value is \"es -r\", which only works if you place the command line version of Everything (es.exe) in your PATH."
+The default value is \"es -r -codepage 65001\", which forces UTF-8 output from Everything CLI (requires a recent es.exe) and works if the Everything command line (es.exe) is in your PATH."
   :type 'string)
 
 (defun org--everything-builder (input)
