@@ -41,8 +41,8 @@
 (require 'subr-x)
 (require 'seq)
 
-;; Configuración de codificación para Everything (por defecto cp850 -> utf-8)
-(add-to-list 'process-coding-system-alist '("es" . (cp850 . utf-8)))
+;; Configuración de codificación para Everything (stdout OEM cp850, args ANSI cp1252)
+(add-to-list 'process-coding-system-alist '("es" . (cp850 . cp1252)))
 
 ;; Función de debug automático para probar codificaciones
 (defun org-everything--test-search (query)
