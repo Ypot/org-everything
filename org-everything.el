@@ -845,10 +845,22 @@ If WITH-CODEPAGE is nil, any -codepage is removed. Append QUERY if non-nil."
                         args*)))
     (cons program final)))
 
+(defun org-everything--args-has-flag (flag)
+  "Return non-nil if `org-everything-args' contains FLAG."
+  (let* ((parts (split-string org-everything-args "[ \t]+" t)))
+    (member flag parts)))
+
+(defun org-everything--test-queries ()
+  "Return a robust list of queries for auto-fix tests depending on -r flag."
+  (if (org-everything--args-has-flag "-r")
+      '(".+" ".*ñ.*" ".*ó.*" ".*")
+    '("*" "*ñ*" "*ó*" "*")))
+
 (defun org-everything--run-cli (coding-in coding-out with-codepage query)
   "Run Everything CLI with CODING-IN/CODING-OUT for process, controlling codepage flag.
 Return output string."
-  (pcase-let* ((`(,program . ,args) (org-everything--build-command with-codepage query)))
+  (pcase-let* ((`(,program . ,args0) (org-everything--build-command with-codepage query))
+               (args (if (member "-n" args0) args0 (append args0 '("-n" "50")))))
     (let ((process-coding-system-alist `(("es" . (,coding-in . ,coding-out))))
           (default-process-coding-system `(,coding-in . ,coding-out)))
       (with-temp-buffer
@@ -878,10 +890,10 @@ Return output string."
 
 (defun org-everything-auto-fix-encodings (&optional query)
   "Automatically try encoding strategies and apply the best one. Optional QUERY to test."
-  (interactive (list (read-string "Query for test (default *): " nil nil "*")))
+  (interactive (list (read-string "Query for test (default auto): " nil nil "")))
   (let* ((queries (if (and query (not (string-empty-p query)))
                       (list query)
-                    '("Dise" "produ" "ñ" "ó" "*")))
+                    (org-everything--test-queries)))
          (best nil)
          (report (get-buffer-create "*Everything-Auto-Fix*")))
     (with-current-buffer report
