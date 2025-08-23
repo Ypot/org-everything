@@ -753,22 +753,97 @@
 The default value is \"es -r\", which only works if you place the command line version of Everything (es.exe) in your PATH."
   :type 'string)
 
+;; Performance/options defcustoms (safe defaults: do nothing unless configured)
+(defcustom org-everything-max-results nil
+  "Maximum number of results to request from es.exe using -n.
+When nil, no limit flag is passed and current behavior is preserved."
+  :type '(choice (const :tag "Unlimited (default)" nil) integer))
+
+(defcustom org-everything-ignore-case nil
+  "When non-nil, add -i to es.exe to perform case-insensitive searches.
+Nil preserves existing behavior."
+  :type 'boolean)
+
+(defcustom org-everything-default-query-prefix ""
+  "Prefix string prepended to user input before sending to es.exe.
+Examples: \"ext:pdf \", \"path:src \", \"file:\", \"folder:\", \"size:>1mb \", \"dm:last10days \".
+Empty string leaves input unchanged."
+  :type 'string)
+
+(defcustom org-everything-extra-args nil
+  "Additional raw arguments passed to es.exe after the defaults.
+Each element is a single argument. Nil leaves the command unchanged."
+  :type '(repeat string))
+
+;; Optional Consult async overrides (nil means: do not override Consult globals)
+(defcustom org-everything-consult-min-input nil
+  "If a number, temporarily override `consult-async-min-input' while running `org-everything'.
+Nil means do not override."
+  :type '(choice (const :tag "Do not override (default)" nil) integer))
+
+(defcustom org-everything-consult-refresh-delay nil
+  "If a number, temporarily override `consult-async-refresh-delay' for `org-everything'.
+Nil means do not override."
+  :type '(choice (const :tag "Do not override (default)" nil) number))
+
+(defcustom org-everything-consult-input-throttle nil
+  "If a number, temporarily override `consult-async-input-throttle' for `org-everything'.
+Nil means do not override."
+  :type '(choice (const :tag "Do not override (default)" nil) number))
+
+(defcustom org-everything-consult-input-debounce nil
+  "If a number, temporarily override `consult-async-input-debounce' for `org-everything'.
+Nil means do not override."
+  :type '(choice (const :tag "Do not override (default)" nil) number))
+
+(defun org-everything--effective-args ()
+  "Build the final argument vector for es.exe based on user options.
+Starts from `org-everything-args' and appends performance flags when configured."
+  (let* ((base (consult--build-args org-everything-args))
+         (args base))
+    (when (and org-everything-ignore-case
+               (not (member "-i" args)))
+      (setq args (append args '("-i"))))
+    (when (and (integerp org-everything-max-results)
+               (> org-everything-max-results 0))
+      (setq args (append args (list "-n" (number-to-string org-everything-max-results)))))
+    (when (listp org-everything-extra-args)
+      (setq args (append args org-everything-extra-args)))
+    args))
+
 (defun org--everything-builder (input)
   "Build command line from INPUT."
   ;; Debug: mostrar qué se está enviando
   (message "DEBUG: Búsqueda enviada a Everything: '%s'" input)
   
   (pcase-let ((`(,arg . ,opts) (consult--command-split input)))
-    (unless (string-blank-p arg)
-      (cons (append (consult--build-args org-everything-args)
-                    (consult--split-escaped arg) opts)
-            (cdr (consult--default-regexp-compiler input 'basic t))))))
+    (let* ((final-arg (if (and (stringp org-everything-default-query-prefix)
+                               (not (string-empty-p org-everything-default-query-prefix))
+                               (not (string-blank-p arg)))
+                          (concat org-everything-default-query-prefix arg)
+                        arg)))
+      (unless (string-blank-p final-arg)
+        (cons (append (org-everything--effective-args)
+                      (consult--split-escaped final-arg) opts)
+              (cdr (consult--default-regexp-compiler input 'basic t)))))))
 
 ;;;###autoload
 (defun org-everything (&optional initial)
   "Search with `everything' for files matching input regexp given INITIAL input."
   (interactive)
-  (find-file (consult--find "Everything: " #'org--everything-builder initial)))
+  (let ((consult-async-min-input (if (numberp org-everything-consult-min-input)
+                                     org-everything-consult-min-input
+                                   consult-async-min-input))
+        (consult-async-refresh-delay (if (numberp org-everything-consult-refresh-delay)
+                                         org-everything-consult-refresh-delay
+                                       consult-async-refresh-delay))
+        (consult-async-input-throttle (if (numberp org-everything-consult-input-throttle)
+                                          org-everything-consult-input-throttle
+                                        consult-async-input-throttle))
+        (consult-async-input-debounce (if (numberp org-everything-consult-input-debounce)
+                                          org-everything-consult-input-debounce
+                                        consult-async-input-debounce)))
+    (find-file (consult--find "Everything: " #'org--everything-builder initial))))
 
 (provide 'org-everything)
 
