@@ -882,19 +882,26 @@ Return output string."
 
 (defconst org-everything-auto-strategies
   '((:name "utf8+codepage" :coding-in utf-8 :coding-out utf-8 :with-codepage t)
+    (:name "utf8+codepage+undecided-in" :coding-in undecided :coding-out utf-8 :with-codepage t)
     (:name "cp1252->utf8" :coding-in cp1252 :coding-out utf-8 :with-codepage nil)
     (:name "win-1252->utf8" :coding-in windows-1252 :coding-out utf-8 :with-codepage nil)
     (:name "cp850->utf8" :coding-in cp850 :coding-out utf-8 :with-codepage nil)
-    (:name "utf8-no-codepage" :coding-in utf-8 :coding-out utf-8 :with-codepage nil)
-    (:name "undecided+codepage" :coding-in undecided :coding-out utf-8 :with-codepage t))
+    (:name "iso-8859-1->utf8" :coding-in iso-8859-1 :coding-out utf-8 :with-codepage nil)
+    (:name "utf8-no-codepage" :coding-in utf-8 :coding-out utf-8 :with-codepage nil))
   "List of encoding strategies to test automatically.")
+
+(defun org-everything--ensure-accent-probes (queries)
+  "Ensure QUERIES includes probes with ñ/ó to test encoding."
+  (let ((need-accents (not (seq-some (lambda (q) (string-match-p "[ñÑóÓ]" q)) queries))))
+    (if need-accents
+        (append queries (if (org-everything--args-has-flag "-r") '(".*ñ.*" ".*ó.*") '("*ñ*" "*ó*")))
+      queries)))
 
 (defun org-everything-auto-fix-encodings (&optional query)
   "Automatically try encoding strategies and apply the best one. Optional QUERY to test."
   (interactive (list (read-string "Query for test (default auto): " nil nil "")))
-  (let* ((queries (if (and query (not (string-empty-p query)))
-                      (list query)
-                    (org-everything--test-queries)))
+  (let* ((queries0 (if (and query (not (string-empty-p query))) (list query) (org-everything--test-queries)))
+         (queries (org-everything--ensure-accent-probes queries0))
          (best nil)
          (report (get-buffer-create "*Everything-Auto-Fix*")))
     (with-current-buffer report
@@ -926,10 +933,10 @@ Return output string."
           (setq best (cons strategy (list :score agg-score :good agg-good :bad agg-bad :lines agg-lines))))))
     (with-current-buffer report
       (insert "\n"))
-    (if (null best)
+    (if (or (null best) (= (plist-get (cdr best) :lines) 0))
         (progn
           (with-current-buffer report
-            (insert "No viable strategy found. Keeping current settings.\n"))
+            (insert "No viable strategy found (no lines). Keeping current settings.\n"))
           (display-buffer report)
           (message "Everything auto-fix: no strategy applied"))
       (let* ((strategy (car best))
@@ -945,7 +952,6 @@ Return output string."
                              (append args (list "-codepage" "65001")))
                          (org-everything--args-remove-codepage args)))
              (new-org-args (mapconcat #'identity (cons program new-args) " ")))
-        ;; Apply settings
         (setq org-everything-args new-org-args)
         (setq process-coding-system-alist (assoc-delete-all "es" process-coding-system-alist))
         (add-to-list 'process-coding-system-alist (cons "es" (cons coding-in coding-out)))
