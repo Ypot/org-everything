@@ -158,7 +158,7 @@
         
         (insert "=== DEBUG COMPLETO ===\n"))
       
-      (display-buffer debug-buffer))))
+      (display-buffer debug-buffer)))))
 
 ;; Función auxiliar para detectar codificación
 (defun org-everything--detect-encoding (string)
