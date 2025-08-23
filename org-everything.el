@@ -41,8 +41,8 @@
 (require 'subr-x)
 (require 'seq)
 
-;; Configuración de codificación para Everything
-(add-to-list 'process-coding-system-alist '("es" . (utf-8 . utf-8)))
+;; Configuración de codificación para Everything (por defecto cp850 -> utf-8)
+(add-to-list 'process-coding-system-alist '("es" . (cp850 . utf-8)))
 
 ;; Función de debug automático para probar codificaciones
 (defun org-everything--test-search (query)
@@ -748,10 +748,10 @@
     (display-buffer buffer)))
 
 (defcustom org-everything-args
-  "es -r -codepage 65001"
+  "es -r"
   "Command line arguments for everything, see `org-everything'.
 
-The default value is \"es -r -codepage 65001\", which forces UTF-8 output from Everything CLI (requires a recent es.exe) and works if the Everything command line (es.exe) is in your PATH."
+The default value is \"es -r\", which works if the Everything command line (es.exe) is in your PATH."
   :type 'string)
 
 (defun org--everything-builder (input)
