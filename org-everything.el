@@ -257,35 +257,9 @@ Notes:
 
 ;;;###autoload
 (defun org-everything (&optional initial)
-  "Search with Everything for files matching input regexp given INITIAL input.
-
-Tips to improve perceived startup speed:
-- Consider adding '-n 300' to `org-everything-args` to limit initial output.
-- Lower `org-everything-consult-refresh-delay` to 0.05 for faster first paint.
-- Use a restrictive `org-everything-default-query-prefix` (e.g., 'path:src ').
-These reduce work before the first results appear."
+  "Search with `everything' for files matching input regexp given INITIAL input."
   (interactive)
-  (let ((consult-async-min-input       (if (numberp org-everything-consult-min-input)
-                                           org-everything-consult-min-input
-                                         consult-async-min-input))
-        (consult-async-refresh-delay   (if (numberp org-everything-consult-refresh-delay)
-                                           org-everything-consult-refresh-delay
-                                         consult-async-refresh-delay))
-        (consult-async-input-throttle  (if (numberp org-everything-consult-input-throttle)
-                                           org-everything-consult-input-throttle
-                                         consult-async-input-throttle))
-        (consult-async-input-debounce  (if (numberp org-everything-consult-input-debounce)
-                                           org-everything-consult-input-debounce
-                                         consult-async-input-debounce))
-        (consult-preview-key           nil))
-    (minibuffer-with-setup-hook
-        (lambda ()
-          (setq-local truncate-lines t)
-          (setq-local truncate-string-ellipsis " …")
-          (setq-local resize-mini-windows t)
-          (setq-local max-mini-window-height 0.33)
-          (org-everything--setup-minibuffer-toggles))
-      (find-file (consult--find "Everything: " #'org--everything-builder initial)))))
+  (find-file (consult--find "Everything: " #'org--everything-builder initial)))
 
 (provide 'org-everything)
 
