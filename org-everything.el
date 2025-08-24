@@ -118,7 +118,7 @@ If initial display feels slow, try reducing to 0.05."
   :type 'number
   :group 'org-everything)
 
-(defcustom org-everything-consult-input-throttle 0.20
+(defcustom org-everything-consult-input-throttle 0.25
   "Minimum time (in seconds) between consecutive asynchronous updates.
 
 Acts as a rate limiter for background updates; helps on huge trees or slower
@@ -126,7 +126,7 @@ machines by reducing refresh bursts while typing fast."
   :type 'number
   :group 'org-everything)
 
-(defcustom org-everything-consult-input-debounce 0.05
+(defcustom org-everything-consult-input-debounce 0.08
   "Waiting time (in seconds) after the last key press before updating.
 
 Consolidates bursts of keystrokes into a single refresh; slightly larger values
@@ -182,21 +182,25 @@ Tips to improve perceived startup speed:
 These reduce work before the first results appear."
   (interactive)
   (let ((consult-async-min-input       (if (numberp org-everything-consult-min-input)
-                                           org-everything-consult-min-input
-                                         consult-async-min-input))
+                                          org-everything-consult-min-input
+                                        consult-async-min-input))
         (consult-async-refresh-delay   (if (numberp org-everything-consult-refresh-delay)
-                                           org-everything-consult-refresh-delay
-                                         consult-async-refresh-delay))
+                                          org-everything-consult-refresh-delay
+                                        consult-async-refresh-delay))
         (consult-async-input-throttle  (if (numberp org-everything-consult-input-throttle)
-                                           org-everything-consult-input-throttle
-                                         consult-async-input-throttle))
+                                          org-everything-consult-input-throttle
+                                        consult-async-input-throttle))
         (consult-async-input-debounce  (if (numberp org-everything-consult-input-debounce)
-                                           org-everything-consult-input-debounce
-                                         consult-async-input-debounce))
+                                          org-everything-consult-input-debounce
+                                        consult-async-input-debounce))
         (consult-preview-key           (if (not (null org-everything-consult-preview-key))
-                                           org-everything-consult-preview-key
-                                         consult-preview-key)))
-    (find-file (consult--find "Everything: " #'org--everything-builder initial))))
+                                          org-everything-consult-preview-key
+                                        consult-preview-key)))
+    (minibuffer-with-setup-hook
+        (lambda ()
+          (setq-local truncate-lines nil)
+          (setq-local word-wrap t)))
+      (find-file (consult--find "Everything: " #'org--everything-builder initial))))
 
 (provide 'org-everything)
 
