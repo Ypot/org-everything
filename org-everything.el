@@ -43,7 +43,7 @@
 
 ;; Core CLI args (keeps original default and behavior)
 (defcustom org-everything-args
-  "es -r"
+  "es -r -n 300"
   "Command line to invoke Everything CLI (es.exe) and its flags.
 
 This string is split using `consult--build-args` and sent as the base command
@@ -240,16 +240,20 @@ Notes:
 
 (defun org-everything--effective-args ()
   "Return the final argument vector for es.exe based on `org-everything-args'."
-  (append (consult--build-args org-everything-args)
-          (or org-everything--active-toggle-args '())))
+  (consult--build-args org-everything-args))
 
 (defun org--everything-builder (input)
-  "Build command line from INPUT."
+  "Build Everything CLI command from INPUT."
   (pcase-let ((`(,arg . ,opts) (consult--command-split input)))
-    (unless (string-blank-p arg)
-      (cons (append (org-everything--effective-args)
-                    (consult--split-escaped arg) opts)
-            (cdr (consult--default-regexp-compiler input 'basic t))))))
+    (let* ((pref org-everything-default-query-prefix)
+           (final-arg (if (and (stringp pref) (not (string-empty-p pref))
+                               (not (string-blank-p arg)))
+                          (concat pref arg)
+                        arg)))
+      (unless (string-blank-p final-arg)
+        (cons (append (org-everything--effective-args)
+                      (consult--split-escaped final-arg) opts)
+              (cdr (consult--default-regexp-compiler input 'basic t)))))))
 
 ;;;###autoload
 (defun org-everything (&optional initial)
