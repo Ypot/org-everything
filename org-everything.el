@@ -43,7 +43,7 @@
 
 ;; Core CLI args (keeps original default and behavior)
 (defcustom org-everything-args
-  "es -r -n 300"
+  "es -r"
   "Command line to invoke Everything CLI (es.exe) and its flags.
 
 This string is split using `consult--build-args` and sent as the base command
