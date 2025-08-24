@@ -183,13 +183,7 @@ These reduce work before the first results appear."
                                            org-everything-consult-input-debounce
                                          consult-async-input-debounce))
         (consult-preview-key           nil))
-    (minibuffer-with-setup-hook
-        (lambda ()
-          (setq-local truncate-lines t)
-          (setq-local truncate-string-ellipsis " …")
-          (setq-local resize-mini-windows t)
-          (setq-local max-mini-window-height 0.33))
-      (find-file (consult--find "Everything: " #'org--everything-builder initial)))))
+    (find-file (consult--find "Everything: " #'org--everything-builder initial))))
 
 (provide 'org-everything)
 
