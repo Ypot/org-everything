@@ -39,9 +39,10 @@
 
 (require 'consult)
 
-;; Configuración de codificación para Everything
-(setq process-coding-system-alist
-      '(("es" . (windows-1252 . windows-1252))))
+;; Configuración de codificación para Everything (solo en Windows)
+(when (eq system-type 'windows-nt)
+  (setq process-coding-system-alist
+        '(("es" . (windows-1252 . windows-1252)))))
 
 ;; Función de debug automático para probar codificaciones
 (defun org-everything--test-search (query)
@@ -1009,9 +1010,6 @@ Starts from `org-everything-args' and appends performance flags when configured.
 
 (defun org--everything-builder (input)
   "Build command line from INPUT."
-  ;; Debug: mostrar qué se está enviando
-  (message "DEBUG: Búsqueda enviada a Everything: '%s'" input)
-  
   (pcase-let ((`(,arg . ,opts) (consult--command-split input)))
     (let* ((final-arg (if (and (stringp org-everything-default-query-prefix)
                                (not (string-empty-p org-everything-default-query-prefix))
