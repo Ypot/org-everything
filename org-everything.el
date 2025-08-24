@@ -135,113 +135,17 @@ favor stability over immediacy."
   :type 'number
   :group 'org-everything)
 
-(defcustom org-everything-toggles nil
-  "Interactive toggles to modify Everything arguments while using `org-everything`.
 
-Each element is a list of five items in this order:
-  (KEY ARGS-ON GROUP DESCRIPTION INITIAL)
 
-- ARGS-ON: List of strings added to es.exe when this toggle is active
-- GROUP: Symbol (or nil). Within the same GROUP only one toggle can be active
-         at a time (useful for mutually exclusive sorts). Different groups do not
-         affect each other.
-- DESCRIPTION: Human-friendly text shown in on-demand help.
-- INITIAL: t to start active when `org-everything` opens; nil to start inactive.
 
-Notes:
-- This base implementation only adds ARGS-ON from active toggles to the command.
-  It does not remove flags from `org-everything-args`. Prefer to keep
-  `org-everything-args` minimal and add behavior via toggles.
-- Press C-c ? in the minibuffer to show a brief help of defined toggles."
-  :type '(repeat (list :tag "Toggle"
-                       (string :tag "Key (kbd string)")
-                       (repeat :tag "Args to add when ON" string)
-                       (choice :tag "Group" (const nil) symbol)
-                       (string :tag "Description")
-                       (boolean :tag "Initially enabled")))
-  :group 'org-everything)
 
-(defvar-local org-everything--toggle-specs nil
-  "Toggle spec list for the current org-everything session (buffer-local).")
 
-(defvar-local org-everything--toggle-state nil
-  "Alist of (INDEX . ACTIVE) for toggles in this session (buffer-local).")
-
-(defvar-local org-everything--active-toggle-args nil
-  "Flattened list of args from active toggles (buffer-local).")
-
-(defun org-everything--recompute-active-toggle-args ()
-  "Recompute `org-everything--active-toggle-args` from `org-everything--toggle-state`."
-  (setq org-everything--active-toggle-args
-        (let ((args '()))
-          (cl-loop for (idx . on) in org-everything--toggle-state do
-                   (when on
-                     (let* ((spec (nth idx org-everything--toggle-specs))
-                            (args-on (nth 1 spec))
-                            (args-on-str (mapcar (lambda (x) (if (stringp x) x (format "%s" x))) args-on)))
-                       (setq args (append args args-on-str)))))
-          args)))
-
-(defun org-everything--toggle-help ()
-  "Show a brief help with the configured toggles in the echo area."
-  (let ((msg (mapconcat
-              (lambda (spec-idx)
-                (let* ((idx (car spec-idx))
-                       (spec (nth idx org-everything--toggle-specs))
-                       (key (key-description (nth 0 spec)))
-                       (desc (nth 3 spec))
-                       (on  (alist-get idx org-everything--toggle-state)))
-                  (format "%s: %s%s" key desc (if on " [ON]" ""))))
-              (cl-loop for i from 0 below (length org-everything--toggle-specs) collect (cons i t))
-              "  • ")))
-    (when (> (length msg) 0)
-      (message "%s" msg))))
-
-(defun org-everything--toggle-by-index (idx)
-  "Toggle entry at IDX respecting mutual exclusion by GROUP."
-  (let* ((spec (nth idx org-everything--toggle-specs))
-         (group (nth 2 spec))
-         (current (alist-get idx org-everything--toggle-state)))
-    (if (and group (not current))
-        ;; Activate this and deactivate others in the same group
-        (progn
-          (setq org-everything--toggle-state
-                (mapcar (lambda (cell)
-                          (let ((j (car cell))
-                                (on (cdr cell))
-                                (g (nth 2 (nth (car cell) org-everything--toggle-specs))))
-                            (cons j (if (and (eq g group) (/= j idx)) nil (if (= j idx) t on)))))
-                        org-everything--toggle-state))
-          (org-everything--recompute-active-toggle-args))
-      ;; Simple flip
-      (setf (alist-get idx org-everything--toggle-state) (not current))
-      (org-everything--recompute-active-toggle-args)))
-  ;; Poke minibuffer input to refresh Consult
-  (when (minibufferp)
-    (save-excursion (insert " ") (backward-delete-char 1))))
-
-(defun org-everything--setup-minibuffer-toggles ()
-  "Initialize toggle state and keybindings in the minibuffer."
-  (setq org-everything--toggle-specs org-everything-toggles)
-  (setq org-everything--toggle-state
-        (cl-loop for i from 0 below (length org-everything--toggle-specs)
-                 collect (cons i (nth 4 (nth i org-everything--toggle-specs)))))
-  (org-everything--recompute-active-toggle-args)
-  ;; Bind keys
-  (dolist (spec-idx (cl-loop for i from 0 below (length org-everything--toggle-specs) collect i))
-    (let* ((spec (nth spec-idx org-everything--toggle-specs))
-           (key (nth 0 spec))
-           (fn  (lambda () (interactive) (org-everything--toggle-by-index spec-idx))))
-      (when key (local-set-key (kbd key) fn))))
-  ;; Help key
-  (local-set-key (kbd "C-c ?") (lambda () (interactive) (org-everything--toggle-help))))
 
 ;; ===== Helpers =====
 
 (defun org-everything--effective-args ()
   "Return the final argument vector for es.exe based on `org-everything-args'."
-  (append (consult--build-args org-everything-args)
-          (or org-everything--active-toggle-args '())))
+  (consult--build-args org-everything-args))
 
 (defun org--everything-builder (input)
   "Build Everything CLI command from INPUT."
@@ -284,8 +188,7 @@ These reduce work before the first results appear."
           (setq-local truncate-lines t)
           (setq-local truncate-string-ellipsis " …")
           (setq-local resize-mini-windows t)
-          (setq-local max-mini-window-height 0.33)
-          (org-everything--setup-minibuffer-toggles))
+          (setq-local max-mini-window-height 0.33))
       (find-file (consult--find "Everything: " #'org--everything-builder initial)))))
 
 (provide 'org-everything)
