@@ -243,17 +243,12 @@ Notes:
   (consult--build-args org-everything-args))
 
 (defun org--everything-builder (input)
-  "Build Everything CLI command from INPUT."
+  "Build command line from INPUT."
   (pcase-let ((`(,arg . ,opts) (consult--command-split input)))
-    (let* ((pref org-everything-default-query-prefix)
-           (final-arg (if (and (stringp pref) (not (string-empty-p pref))
-                               (not (string-blank-p arg)))
-                          (concat pref arg)
-                        arg)))
-      (unless (string-blank-p final-arg)
-        (cons (append (org-everything--effective-args)
-                      (consult--split-escaped final-arg) opts)
-              (cdr (consult--default-regexp-compiler input 'basic t)))))))
+    (unless (string-blank-p arg)
+      (cons (append (consult--build-args org-everything-args)
+                    (consult--split-escaped arg) opts)
+            (cdr (consult--default-regexp-compiler input 'basic t))))))
 
 ;;;###autoload
 (defun org-everything (&optional initial)
