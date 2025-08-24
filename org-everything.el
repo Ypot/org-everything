@@ -43,7 +43,7 @@
 
 ;; Core CLI args (keeps original default and behavior)
 (defcustom org-everything-args
-  "es -r"
+  "es -r -n 300"
   "Command line to invoke Everything CLI (es.exe) and its flags.
 
 This string is split using `consult--build-args` and sent as the base command
@@ -240,21 +240,53 @@ Notes:
 
 (defun org-everything--effective-args ()
   "Return the final argument vector for es.exe based on `org-everything-args'."
-  (consult--build-args org-everything-args))
+  (append (consult--build-args org-everything-args)
+          (or org-everything--active-toggle-args '())))
 
 (defun org--everything-builder (input)
-  "Build command line from INPUT."
+  "Build Everything CLI command from INPUT."
   (pcase-let ((`(,arg . ,opts) (consult--command-split input)))
-    (unless (string-blank-p arg)
-      (cons (append (consult--build-args org-everything-args)
-                    (consult--split-escaped arg) opts)
-            (cdr (consult--default-regexp-compiler input 'basic t))))))
+    (let* ((pref org-everything-default-query-prefix)
+           (final-arg (if (and (stringp pref) (not (string-empty-p pref))
+                               (not (string-blank-p arg)))
+                          (concat pref arg)
+                        arg)))
+      (unless (string-blank-p final-arg)
+        (cons (append (org-everything--effective-args)
+                      (consult--split-escaped final-arg) opts)
+              (cdr (consult--default-regexp-compiler input 'basic t)))))))
 
 ;;;###autoload
 (defun org-everything (&optional initial)
-  "Search with `everything' for files matching input regexp given INITIAL input."
+  "Search with Everything for files matching input regexp given INITIAL input.
+
+Tips to improve perceived startup speed:
+- Consider adding '-n 300' to `org-everything-args` to limit initial output.
+- Lower `org-everything-consult-refresh-delay` to 0.05 for faster first paint.
+- Use a restrictive `org-everything-default-query-prefix` (e.g., 'path:src ').
+These reduce work before the first results appear."
   (interactive)
-  (find-file (consult--find "Everything: " #'org--everything-builder initial)))
+  (let ((consult-async-min-input       (if (numberp org-everything-consult-min-input)
+                                           org-everything-consult-min-input
+                                         consult-async-min-input))
+        (consult-async-refresh-delay   (if (numberp org-everything-consult-refresh-delay)
+                                           org-everything-consult-refresh-delay
+                                         consult-async-refresh-delay))
+        (consult-async-input-throttle  (if (numberp org-everything-consult-input-throttle)
+                                           org-everything-consult-input-throttle
+                                         consult-async-input-throttle))
+        (consult-async-input-debounce  (if (numberp org-everything-consult-input-debounce)
+                                           org-everything-consult-input-debounce
+                                         consult-async-input-debounce))
+        (consult-preview-key           nil))
+    (minibuffer-with-setup-hook
+        (lambda ()
+          (setq-local truncate-lines t)
+          (setq-local truncate-string-ellipsis " …")
+          (setq-local resize-mini-windows t)
+          (setq-local max-mini-window-height 0.33)
+          (org-everything--setup-minibuffer-toggles))
+      (find-file (consult--find "Everything: " #'org--everything-builder initial)))))
 
 (provide 'org-everything)
 
