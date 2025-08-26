@@ -1,0 +1,100 @@
+;;; embark-org-everything-minimal.el --- Minimal Embark config for org-everything -*- lexical-binding: t; -*-
+
+;; Minimal configuration implementing exactly the requested keybindings:
+;; (define-key dired-mode-map (kbd "C-c C-x C-w") 'dired-do-delete)
+;; (define-key dired-mode-map (kbd "C-c C-x M-w") 'dired-do-copy)
+;; ("C-c l" . org-store-link)
+;; ("w" . browse-url-of-dired-file)
+;; ("M-w" . dired-copy-filename-as-kill)
+;; ("C-w" . diredp-copy-abs-filenames-as-kill)
+
+;;; Code:
+
+(require 'embark)
+(require 'dired)
+(require 'org)
+
+;; Target finder for org-everything results
+(defun embark-org-everything-target-finder ()
+  "Find file targets in org-everything results."
+  (when (and (derived-mode-p 'consult--read-mode)
+             (string-match "Everything:" (buffer-name)))
+    (let ((candidate (embark--target-at-point)))
+      (when (and candidate (file-exists-p candidate))
+        candidate))))
+
+;; Add target finder to Embark
+(add-to-list 'embark-target-finders #'embark-org-everything-target-finder)
+
+;; Action functions - exact equivalents to the requested Dired functions
+
+(defun embark-org-everything-dired-do-delete (file)
+  "Delete FILE found by org-everything (equivalent to dired-do-delete)."
+  (interactive "fFile to delete: ")
+  (let ((file-path (expand-file-name file)))
+    (when (file-exists-p file-path)
+      (if (y-or-n-p (format "Delete file %s? " file-path))
+          (delete-file file-path)
+        (message "Deletion cancelled")))))
+
+(defun embark-org-everything-dired-do-copy (file)
+  "Copy FILE found by org-everything (equivalent to dired-do-copy)."
+  (interactive "fFile to copy: ")
+  (let ((file-path (expand-file-name file)))
+    (when (file-exists-p file-path)
+      (let ((dest (read-file-name "Copy to: " 
+                                  (file-name-directory file-path))))
+        (copy-file file-path dest t)
+        (message "Copied %s to %s" file-path dest)))))
+
+(defun embark-org-everything-org-store-link (file)
+  "Store org link for FILE found by org-everything (equivalent to org-store-link)."
+  (interactive "fFile to store link for: ")
+  (let ((file-path (expand-file-name file)))
+    (when (file-exists-p file-path)
+      (org-store-link file-path)
+      (message "Stored org link for %s" file-path))))
+
+(defun embark-org-everything-browse-url-of-dired-file (file)
+  "Browse URL for FILE found by org-everything (equivalent to browse-url-of-dired-file)."
+  (interactive "fFile to browse: ")
+  (let ((file-path (expand-file-name file)))
+    (when (file-exists-p file-path)
+      (browse-url-of-file file-path))))
+
+(defun embark-org-everything-dired-copy-filename-as-kill (file)
+  "Copy filename of FILE found by org-everything (equivalent to dired-copy-filename-as-kill)."
+  (interactive "fFile to copy filename: ")
+  (let ((file-path (expand-file-name file)))
+    (when (file-exists-p file-path)
+      (kill-new (file-name-nondirectory file-path))
+      (message "Copied filename: %s" (file-name-nondirectory file-path)))))
+
+(defun embark-org-everything-diredp-copy-abs-filenames-as-kill (file)
+  "Copy absolute filename of FILE found by org-everything (equivalent to diredp-copy-abs-filenames-as-kill)."
+  (interactive "fFile to copy absolute filename: ")
+  (let ((file-path (expand-file-name file)))
+    (when (file-exists-p file-path)
+      (kill-new file-path)
+      (message "Copied absolute filename: %s" file-path))))
+
+;; Keymap with exactly the requested keybindings
+(defvar embark-org-everything-keymap
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-x C-w") #'embark-org-everything-dired-do-delete)
+    (define-key map (kbd "C-c C-x M-w") #'embark-org-everything-dired-do-copy)
+    (define-key map (kbd "C-c l") #'embark-org-everything-org-store-link)
+    (define-key map (kbd "w") #'embark-org-everything-browse-url-of-dired-file)
+    (define-key map (kbd "M-w") #'embark-org-everything-dired-copy-filename-as-kill)
+    (define-key map (kbd "C-w") #'embark-org-everything-diredp-copy-abs-filenames-as-kill)
+    map)
+  "Keymap for org-everything file actions in Embark.")
+
+;; Add keymap to Embark
+(add-to-list 'embark-keymap-alist '(file . embark-org-everything-keymap))
+
+(message "Embark org-everything minimal integration loaded")
+
+(provide 'embark-org-everything-minimal)
+
+;;; embark-org-everything-minimal.el ends here

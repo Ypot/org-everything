@@ -82,26 +82,20 @@
 ;; Create a keymap for the specific actions
 (defvar embark-org-everything-keymap
   (let ((map (make-sparse-keymap)))
-    ;; Map the specific keys mentioned by the user
+    ;; Use exactly the keybindings provided by the user
     (define-key map (kbd "C-c C-x C-w") #'embark-org-everything-delete)
     (define-key map (kbd "C-c C-x M-w") #'embark-org-everything-copy)
     (define-key map (kbd "C-c l") #'embark-org-everything-store-link)
     (define-key map (kbd "w") #'embark-org-everything-browse-url)
     (define-key map (kbd "M-w") #'embark-org-everything-copy-filename)
     (define-key map (kbd "C-w") #'embark-org-everything-copy-abs-filename)
-    ;; Add some additional useful shortcuts
-    (define-key map (kbd "d") #'embark-org-everything-delete)
-    (define-key map (kbd "c") #'embark-org-everything-copy)
-    (define-key map (kbd "l") #'embark-org-everything-store-link)
-    (define-key map (kbd "y") #'embark-org-everything-copy-filename)
-    (define-key map (kbd "Y") #'embark-org-everything-copy-abs-filename)
     map)
   "Keymap for org-everything file actions in Embark.")
 
 ;; Add the keymap to Embark's keymap alist
 (add-to-list 'embark-keymap-alist '(file . embark-org-everything-keymap))
 
-;; Alternative: Define actions that can be selected from a menu
+;; Define actions that can be selected from a menu
 (setq embark-org-everything-actions
       '(("Delete file (C-c C-x C-w)" . embark-org-everything-delete)
         ("Copy file (C-c C-x M-w)" . embark-org-everything-copy)
